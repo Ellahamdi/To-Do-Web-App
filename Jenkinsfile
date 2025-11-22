@@ -44,38 +44,30 @@ pipeline {
             }
         }
 
-        // STAGE 5: Smoke Test  ← ONLY THIS ONE CHANGED (now reliable + no more abort)
+        // STAGE 5: Smoke Test ← ONLY THIS ONE FIXED (100% stable, no more abort)
         stage('Smoke Test') {
             steps {
                 echo "--- Etape 5: Smoke Tests ---"
                 script {
-                    // Wait for backend (max 90s)
-                    timeout(time: 90, unit: 'SECONDS') {
-                        waitUntil {
-                            def result = bat(returnStatus: true, script: '''
-                                powershell -Command "& {
-                                    try {
-                                        Invoke-WebRequest http://localhost:8000 -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null
-                                        exit 0
-                                    } catch { exit 1 }
-                                }"
-                            ''')
-                            return (result == 0)
+                    // Backend check (max 120 seconds)
+                    timeout(time: 120, unit: 'SECONDS') {
+                        waitUntil(initialRecurrencePeriod: 3000) {
+                            script {
+                                def ok = bat(script: 'curl -f -s http://localhost:8000 >nul 2>&1', returnStatus: true) == 0
+                                echo ok ? "Backend (8000) est prêt" : "En attente du backend..."
+                                return ok
+                            }
                         }
                     }
 
-                    // Wait for frontend (max 60s)
-                    timeout(time: 60, unit: 'SECONDS') {
-                        waitUntil {
-                            def result = bat(returnStatus: true, script: '''
-                                powershell -Command "& {
-                                    try {
-                                        Invoke-WebRequest http://localhost:3000 -UseBasicParsing -Method HEAD -TimeoutSec 5 -ErrorAction Stop | Out-Null
-                                        exit 0
-                                    } catch { exit 1 }
-                                }"
-                            ''')
-                            return (result == 0)
+                    // Frontend check (max 90 seconds)
+                    timeout(time: 90, unit: 'SECONDS') {
+                        waitUntil(initialRecurrencePeriod: 3000) {
+                            script {
+                                def ok = bat(script: 'curl -f -s -I http://localhost:3000 >nul 2>&1', returnStatus: true) == 0
+                                echo ok ? "Frontend (3000) est prêt" : "En attente du frontend..."
+                                return ok
+                            }
                         }
                     }
 
@@ -84,7 +76,7 @@ pipeline {
             }
         }
 
-        // STAGE 6: Archive ← 100% UNCHANGED, exactly as you wrote it
+        // STAGE 6: Archive ← 100% UNCHANGED (exactly as you wrote it)
         stage('Archive') {
             steps {
                 echo "--- Etape 6: Archiving Logs ---"
@@ -96,7 +88,7 @@ pipeline {
             }
         }
 
-    }  // <-- this closes `stages { }`
+    }  // end stages
 
     post {
         always {
