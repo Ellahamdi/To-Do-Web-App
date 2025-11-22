@@ -40,55 +40,51 @@ pipeline {
             steps {
                 echo "--- Etape 4: Run Containers ---"
                 bat 'docker-compose up -d'
-                // sleep 15 removed → we now wait properly in the next stage
+                sleep 15
             }
         }
 
-        // STAGE 5: Smoke Test ← FIXED & RELIABLE NOW
+        // STAGE 5: Smoke Test  ← ONLY THIS ONE CHANGED (now reliable + no more abort)
         stage('Smoke Test') {
             steps {
                 echo "--- Etape 5: Smoke Tests ---"
                 script {
-                    // Wait for backend (max 90 seconds)
+                    // Wait for backend (max 90s)
                     timeout(time: 90, unit: 'SECONDS') {
                         waitUntil {
-                            script {
-                                def result = bat(script: """
-                                    powershell -Command "
-                                        try {
-                                            \$resp = Invoke-WebRequest http://localhost:8000 -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-                                            if (\$resp.StatusCode -eq 200) { exit 0 } else { exit 1 }
-                                        } catch { exit 1 }
-                                    "
-                                """, returnStatus: true)
-                                return (result == 0)
-                            }
+                            def result = bat(returnStatus: true, script: '''
+                                powershell -Command "& {
+                                    try {
+                                        Invoke-WebRequest http://localhost:8000 -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null
+                                        exit 0
+                                    } catch { exit 1 }
+                                }"
+                            ''')
+                            return (result == 0)
                         }
                     }
 
-                    // Wait for frontend (max 60 seconds)
+                    // Wait for frontend (max 60s)
                     timeout(time: 60, unit: 'SECONDS') {
                         waitUntil {
-                            script {
-                                def result = bat(script: """
-                                    powershell -Command "
-                                        try {
-                                            Invoke-WebRequest http://localhost:3000 -UseBasicParsing -Method HEAD -TimeoutSec 10 -ErrorAction Stop | Out-Null
-                                            exit 0
-                                        } catch { exit 1 }
-                                    "
-                                """, returnStatus: true)
-                                return (result == 0)
-                            }
+                            def result = bat(returnStatus: true, script: '''
+                                powershell -Command "& {
+                                    try {
+                                        Invoke-WebRequest http://localhost:3000 -UseBasicParsing -Method HEAD -TimeoutSec 5 -ErrorAction Stop | Out-Null
+                                        exit 0
+                                    } catch { exit 1 }
+                                }"
+                            ''')
+                            return (result == 0)
                         }
                     }
 
-                    echo "Smoke Tests validés : Les ports 3000 et 8000 répondent correctement !"
+                    echo "Smoke Tests validés : Les ports 3000 et 8000 répondent."
                 }
             }
         }
 
-        // STAGE 6: Archive (unchanged)
+        // STAGE 6: Archive ← 100% UNCHANGED, exactly as you wrote it
         stage('Archive') {
             steps {
                 echo "--- Etape 6: Archiving Logs ---"
@@ -100,7 +96,7 @@ pipeline {
             }
         }
 
-    }  // end stages
+    }  // <-- this closes `stages { }`
 
     post {
         always {
