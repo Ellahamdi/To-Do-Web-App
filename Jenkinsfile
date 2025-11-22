@@ -40,28 +40,55 @@ pipeline {
             steps {
                 echo "--- Etape 4: Run Containers ---"
                 bat 'docker-compose up -d'
-                sleep 15
+                // sleep 15 removed → we now wait properly in the next stage
             }
         }
 
-        // STAGE 5: Smoke Test
+        // STAGE 5: Smoke Test ← FIXED & RELIABLE NOW
         stage('Smoke Test') {
             steps {
                 echo "--- Etape 5: Smoke Tests ---"
                 script {
+                    // Wait for backend (max 90 seconds)
+                    timeout(time: 90, unit: 'SECONDS') {
+                        waitUntil {
+                            script {
+                                def result = bat(script: """
+                                    powershell -Command "
+                                        try {
+                                            \$resp = Invoke-WebRequest http://localhost:8000 -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                                            if (\$resp.StatusCode -eq 200) { exit 0 } else { exit 1 }
+                                        } catch { exit 1 }
+                                    "
+                                """, returnStatus: true)
+                                return (result == 0)
+                            }
+                        }
+                    }
 
-                    // Backend test
-                    bat 'powershell -Command "Try { Invoke-WebRequest http://localhost:8000 -UseBasicParsing; exit 0 } Catch { exit 1 }"'
+                    // Wait for frontend (max 60 seconds)
+                    timeout(time: 60, unit: 'SECONDS') {
+                        waitUntil {
+                            script {
+                                def result = bat(script: """
+                                    powershell -Command "
+                                        try {
+                                            Invoke-WebRequest http://localhost:3000 -UseBasicParsing -Method HEAD -TimeoutSec 10 -ErrorAction Stop | Out-Null
+                                            exit 0
+                                        } catch { exit 1 }
+                                    "
+                                """, returnStatus: true)
+                                return (result == 0)
+                            }
+                        }
+                    }
 
-                    // Frontend test
-                    bat 'powershell -Command "Try { Invoke-WebRequest http://localhost:3000 -UseBasicParsing; exit 0 } Catch { exit 1 }"'
-
-                    echo "Smoke Tests validés : Les ports 3000 et 8000 répondent."
+                    echo "Smoke Tests validés : Les ports 3000 et 8000 répondent correctement !"
                 }
             }
         }
 
-        // STAGE 6: Archive
+        // STAGE 6: Archive (unchanged)
         stage('Archive') {
             steps {
                 echo "--- Etape 6: Archiving Logs ---"
@@ -73,7 +100,7 @@ pipeline {
             }
         }
 
-    }  // <-- this closes `stages { }`
+    }  // end stages
 
     post {
         always {
