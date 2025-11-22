@@ -64,31 +64,32 @@ pipeline {
             steps {
                 echo "--- Etape 5: Smoke Tests ---"
                 script {
-                    // Test backend
-                    bat 'curl -v http://localhost:8000 || echo Backend accessible mais route racine non définie'
+                // Backend test
+                   bat 'powershell -Command "Try { Invoke-WebRequest http://localhost:8000 -UseBasicParsing; exit 0 } Catch { exit 1 }"'
 
-                    // Test frontend
-                    bat 'curl -I --fail http://localhost:3000'
-                    
-                    echo "Smoke Tests validés : Les ports 3000 et 8000 répondent."
-                }
-            }
+                // Frontend test
+                   bat 'powershell -Command "Try { Invoke-WebRequest http://localhost:3000 -UseBasicParsing; exit 0 } Catch { exit 1 }"'
+
+                   echo "Smoke Tests validés : Les ports 3000 et 8000 répondent."
         }
+    }
+}
 
         // ---------------------------------------------------------
         // STAGE 6: Archive
         // ---------------------------------------------------------
         stage('Archive') {
-            steps {
-                echo "--- Etape 6: Archiving Logs ---"
-                bat 'docker-compose logs backend > backend.log'
-                bat 'docker-compose logs frontend > frontend.log'
-                bat 'docker-compose logs mongo > mongo.log'
+           steps {
+              echo "--- Etape 6: Archiving Logs ---"
 
-                archiveArtifacts artifacts: '*.log', allowEmptyArchive: true
-            }
-        }
+              bat 'docker-compose logs backend > backend.log || exit 0'
+              bat 'docker-compose logs frontend > frontend.log || exit 0'
+              bat 'docker-compose logs mongo > mongo.log || exit 0'
+
+              archiveArtifacts artifacts: '*.log', allowEmptyArchive: true
     }
+}
+
 
     post {
         always {
