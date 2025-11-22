@@ -6,12 +6,7 @@ pipeline {
         COMPOSE_PROJECT_NAME = "todo_project"
     }
 
-    options {
-        // Timeout global pour éviter que le job ne tourne indéfiniment en cas de bug
-        timeout(time: 15, unit: 'MINUTES')
-        // Garde des couleurs dans la sortie console
-        ansiColor('xterm') 
-    }
+    
 
     stages {
         // ---------------------------------------------------------
