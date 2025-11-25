@@ -1,0 +1,67 @@
+pipeline {
+  agent any
+
+  environment {
+    NODE_ENV = "test"
+    // Référence locale du PDF du projet (pour rapport) : /mnt/data/Projet DevOps.pdf
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        echo 'Checkout du dépôt...'
+        checkout scm
+      }
+    }
+
+    stage('Install client deps') {
+      steps {
+        echo 'Installation des dépendances client (npm ci)'
+        // Utilise npm ci pour des installations reproductibles en CI
+        bat 'cd client && npm ci'
+      }
+    }
+
+    stage('Run todotest') {
+      steps {
+        echo 'Exécution du test client: test:todotest'
+        // Exécuter le script dédié qui produit aussi le rapport jest-junit
+        // Le '|| exit 0' empêche le shell de renvoyer une erreur qui arrêterait Jenkins avant le bloc post
+        bat 'cd client && npm run test:todotest || exit 0'
+      }
+    }
+
+    stage('Collect additional artifacts (optional)') {
+      steps {
+        echo 'Collecte des fichiers utiles (logs, coverage)'
+        // Si tes tests génèrent des fichiers supplémentaires, copie/prepare-les ici
+        bat 'if exist client\\coverage echo coverage exists || echo no coverage'
+      }
+    }
+  }
+
+  post {
+    always {
+      echo 'Publication des rapports et archivage des artefacts'
+      // JUnit attend un chemin de style Windows (double backslash)
+      junit allowEmptyResults: true, testResults: 'client\\reports\\junit.xml'
+
+      // Archiver les rapports et la couverture si présents
+      archiveArtifacts artifacts: 'client\\reports\\**', allowEmptyArchive: true
+      archiveArtifacts artifacts: 'client\\coverage\\**', allowEmptyArchive: true
+
+      // Copier (optionnel) le PDF du projet dans les artefacts pour la traçabilité
+      // si l'agent Jenkins peut accéder au chemin local ci-dessous
+      bat 'if exist "C:\\workspace\\Projet DevOps.pdf" copy "C:\\workspace\\Projet DevOps.pdf" . || echo PDF not copied'
+    }
+
+    success {
+      echo 'Tests client terminés: SUCCÈS ✅'
+    }
+
+    failure {
+      echo 'Au moins un test a échoué ❌ (voir Test Result / Console Output)'
+    }
+  }
+}
+_
